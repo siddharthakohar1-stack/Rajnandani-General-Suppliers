@@ -25,13 +25,33 @@ Edit the `CAMPAIGN` and `REWARDS` objects at the top of `server.js`:
 
 - `CAMPAIGN.startDate` / `endDate` — scratching is blocked outside this window.
 - `REWARDS` — each entry has a `weight` (odds), optional `remaining` (stock limit, `null` = unlimited),
-  and `validityDays` (coupon expiry). The `none` entry is the "better luck next time" outcome.
+  and `validityDays` (coupon expiry). Every entry here is a real prize — there's no "better luck next
+  time" outcome, every scratch wins something.
 
 ## Data
 
-Participation and coupon records are stored in `data/store.json` (auto-created). Delete that file to
-reset the campaign. For real production use, swap this for a proper database before you get real
-customer traffic — this file-based store is fine for a single small shop running on one machine.
+Two interchangeable storage backends live in `lib/`:
+
+- `lib/file-store.js` — a local JSON file (`data/store.json`). Used automatically when no
+  `KV_REST_API_URL` env var is set, i.e. for `npm start` on your own machine.
+- `lib/kv-store.js` — Vercel KV (Redis). Used automatically when `KV_REST_API_URL` is present, i.e.
+  when deployed on Vercel, since serverless functions have no persistent disk or memory between requests.
+
+## Deploying on Vercel
+
+1. Push this repo to GitHub, import it into a Vercel project.
+2. In the project's **Storage** tab, create/connect a **KV** database — this injects
+   `KV_REST_API_URL`/`KV_REST_API_TOKEN` automatically, which is what switches the app onto the KV
+   backend above. Without this step, every request fails because nothing initialized `@vercel/kv`.
+3. In **Settings → Environment Variables**, set `STAFF_PASSCODE` and `ADMIN_PASSCODE` to your own
+   values — don't leave the defaults (`2026` / `owner2026`) live in production.
+4. Redeploy. Customer page at your Vercel URL, staff page at `/staff.html`, dealer data at
+   `/dealers.html`.
+
+## Deploying on Render (alternative)
+
+`render.yaml` is also included if you'd rather run this as a normal long-lived Node process with a
+persistent disk instead of Vercel KV — see the comments in that file for the Starter-plan disk config.
 
 ## What's deliberately not built yet (MVP scope)
 

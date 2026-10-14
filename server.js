@@ -2,10 +2,13 @@
 // Server is authoritative for: eligibility, reward selection, coupon issuance,
 // duplicate-participation blocking, and redemption. The browser only animates
 // the scratch reveal of a result the server already decided.
+//
+// Storage: Vercel KV (Redis) when KV_REST_API_URL is set — required on Vercel,
+// since serverless functions have no persistent disk or long-lived memory.
+// Falls back to a local JSON file for `npm start` on your own machine.
 
 const express = require('express');
 const crypto = require('crypto');
-const fs = require('fs');
 const path = require('path');
 
 const app = express();
@@ -42,25 +45,11 @@ const STAFF_PASSCODE = process.env.STAFF_PASSCODE || '2026';
 const ADMIN_PASSCODE = process.env.ADMIN_PASSCODE || 'owner2026';
 
 // ---------------------------------------------------------------------------
-// Tiny synchronous JSON data store (fine for single-process MVP traffic;
-// swap for a real DB + auth before scaling this up).
+// Data layer — two interchangeable backends behind the same small interface.
 // ---------------------------------------------------------------------------
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
-const DATA_FILE = path.join(DATA_DIR, 'store.json');
-
-function loadStore() {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  if (!fs.existsSync(DATA_FILE)) {
-    return { participations: {}, coupons: {} };
-  }
-  return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-}
-
-function saveStore(store) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(store, null, 2));
-}
-
-let store = loadStore();
+const db = process.env.KV_REST_API_URL
+  ? require('./lib/kv-store')
+  : require('./lib/file-store');
 
 function normalizeMobile(mobile) {
   return String(mobile || '').replace(/\D/g, '');
@@ -71,20 +60,34 @@ function isCampaignActive() {
   return now >= Date.parse(CAMPAIGN.startDate) && now <= Date.parse(CAMPAIGN.endDate);
 }
 
-function pickReward() {
-  const eligible = REWARDS.filter(r => r.remaining === null || r.remaining > 0);
-  const totalWeight = eligible.reduce((sum, r) => sum + r.weight, 0);
-  let roll = Math.random() * totalWeight;
-  for (const r of eligible) {
-    if (roll < r.weight) return r;
-    roll -= r.weight;
-  }
-  return eligible[eligible.length - 1];
-}
-
 function generateCouponCode() {
   const random = crypto.randomBytes(5).toString('hex').toUpperCase();
   return `RAJ-${random}`;
+}
+
+// Pick a reward, atomically reserving stock. Retries if a concurrent request
+// wins the last unit of a limited reward between the pick and the reserve.
+async function pickAndReserveReward() {
+  const candidates = [...REWARDS];
+  while (candidates.length > 0) {
+    const totalWeight = candidates.reduce((sum, r) => sum + r.weight, 0);
+    let roll = Math.random() * totalWeight;
+    let picked = candidates[candidates.length - 1];
+    for (const r of candidates) {
+      if (roll < r.weight) { picked = r; break; }
+      roll -= r.weight;
+    }
+
+    if (picked.remaining === null) return picked;
+
+    const ok = await db.reserveStock(picked.id, picked.remaining);
+    if (ok) return picked;
+
+    // Out of stock — drop it and re-roll among what's left.
+    const idx = candidates.indexOf(picked);
+    candidates.splice(idx, 1);
+  }
+  throw new Error('No rewards configured.');
 }
 
 // ---------------------------------------------------------------------------
@@ -94,11 +97,11 @@ app.get('/api/campaign', (req, res) => {
   res.json({
     ...CAMPAIGN,
     active: isCampaignActive(),
-    rewardPreview: REWARDS.filter(r => r.id !== 'none').map(r => r.label)
+    rewardPreview: REWARDS.map(r => r.label)
   });
 });
 
-app.post('/api/scratch', (req, res) => {
+app.post('/api/scratch', async (req, res) => {
   const shopName = String(req.body.shopName || '').trim();
   const dealerName = String(req.body.dealerName || '').trim();
   const mobile = normalizeMobile(req.body.mobile);
@@ -115,23 +118,25 @@ app.post('/api/scratch', (req, res) => {
   if (!isCampaignActive()) {
     return res.status(403).json({ error: 'This campaign is not currently active.' });
   }
-  if (store.participations[mobile]) {
-    return res.status(409).json({
-      error: 'This mobile number has already participated in this campaign.',
-      previousResult: store.participations[mobile]
-    });
-  }
 
-  const reward = pickReward();
-  const now = new Date();
+  try {
+    // Atomically claim this mobile number before doing anything else —
+    // this is what makes "one scratch per dealer" hold up under concurrent requests.
+    const claimed = await db.claimParticipation(mobile);
+    if (!claimed) {
+      const previous = await db.getParticipation(mobile);
+      return res.status(409).json({
+        error: 'This mobile number has already participated in this campaign.',
+        previousResult: previous
+      });
+    }
 
-  let coupon = null;
-  if (reward.type !== 'none') {
-    if (reward.remaining !== null) reward.remaining -= 1;
+    const reward = await pickAndReserveReward();
+    const now = new Date();
 
     const code = generateCouponCode();
     const expiresAt = new Date(now.getTime() + reward.validityDays * 86400000);
-    coupon = {
+    const coupon = {
       code,
       shopName,
       dealerName,
@@ -142,34 +147,32 @@ app.post('/api/scratch', (req, res) => {
       expiresAt: expiresAt.toISOString(),
       status: 'issued' // issued | redeemed | cancelled
     };
-    store.coupons[code] = coupon;
+    await db.saveCoupon(coupon);
+
+    const participation = {
+      shopName,
+      dealerName,
+      mobile,
+      timestamp: now.toISOString(),
+      won: true,
+      rewardLabel: reward.label,
+      couponCode: code
+    };
+    await db.saveParticipation(mobile, participation);
+
+    res.json({ won: true, rewardLabel: reward.label, coupon });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
-
-  const participation = {
-    shopName,
-    dealerName,
-    mobile,
-    timestamp: now.toISOString(),
-    won: reward.type !== 'none',
-    rewardLabel: reward.label,
-    couponCode: coupon ? coupon.code : null
-  };
-  store.participations[mobile] = participation;
-  saveStore(store);
-
-  res.json({
-    won: participation.won,
-    rewardLabel: reward.label,
-    coupon
-  });
 });
 
 // Staff: look up a coupon's status without redeeming it
-app.post('/api/verify', (req, res) => {
+app.post('/api/verify', async (req, res) => {
   const { code, passcode } = req.body;
   if (passcode !== STAFF_PASSCODE) return res.status(401).json({ error: 'Invalid staff passcode.' });
 
-  const coupon = store.coupons[(code || '').trim().toUpperCase()];
+  const coupon = await db.getCoupon((code || '').trim().toUpperCase());
   if (!coupon) return res.status(404).json({ error: 'Coupon code not found.' });
 
   const expired = Date.now() > Date.parse(coupon.expiresAt);
@@ -177,17 +180,14 @@ app.post('/api/verify', (req, res) => {
 });
 
 // Staff: redeem a valid coupon exactly once
-app.post('/api/redeem', (req, res) => {
+app.post('/api/redeem', async (req, res) => {
   const { code, passcode } = req.body;
   if (passcode !== STAFF_PASSCODE) return res.status(401).json({ error: 'Invalid staff passcode.' });
 
   const key = (code || '').trim().toUpperCase();
-  const coupon = store.coupons[key];
+  const coupon = await db.getCoupon(key);
   if (!coupon) return res.status(404).json({ error: 'Coupon code not found.' });
 
-  if (coupon.status === 'redeemed') {
-    return res.status(409).json({ error: `Already redeemed on ${coupon.redeemedAt}.`, coupon });
-  }
   if (coupon.status === 'cancelled') {
     return res.status(409).json({ error: 'This coupon was cancelled.', coupon });
   }
@@ -195,44 +195,51 @@ app.post('/api/redeem', (req, res) => {
     return res.status(409).json({ error: 'This coupon has expired.', coupon });
   }
 
+  // Atomic compare-and-swap guard: only the request that wins this lock may redeem.
+  const wonLock = await db.claimRedemption(key);
+  if (!wonLock) {
+    const latest = await db.getCoupon(key);
+    return res.status(409).json({ error: `Already redeemed on ${latest.redeemedAt}.`, coupon: latest });
+  }
+
   coupon.status = 'redeemed';
   coupon.redeemedAt = new Date().toISOString();
-  saveStore(store);
+  await db.saveCoupon(coupon);
 
   res.json({ success: true, coupon });
 });
 
 // Admin: list every dealer who scratched, with their coupon status —
 // use this to plan gifts/offers for repeat dealers or unredeemed winners.
-function buildDealerRows() {
-  return Object.values(store.participations)
-    .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
-    .map(p => {
-      const coupon = p.couponCode ? store.coupons[p.couponCode] : null;
-      return {
-        shopName: p.shopName,
-        dealerName: p.dealerName,
-        mobile: p.mobile,
-        participatedAt: p.timestamp,
-        won: p.won,
-        rewardLabel: p.rewardLabel,
-        couponCode: p.couponCode || '',
-        couponStatus: coupon ? coupon.status : '',
-        expiresAt: coupon ? coupon.expiresAt : '',
-        redeemedAt: coupon ? (coupon.redeemedAt || '') : ''
-      };
-    });
+async function buildDealerRows() {
+  const participations = await db.listParticipations();
+  const rows = await Promise.all(participations.map(async p => {
+    const coupon = p.couponCode ? await db.getCoupon(p.couponCode) : null;
+    return {
+      shopName: p.shopName,
+      dealerName: p.dealerName,
+      mobile: p.mobile,
+      participatedAt: p.timestamp,
+      won: p.won,
+      rewardLabel: p.rewardLabel,
+      couponCode: p.couponCode || '',
+      couponStatus: coupon ? coupon.status : '',
+      expiresAt: coupon ? coupon.expiresAt : '',
+      redeemedAt: coupon ? (coupon.redeemedAt || '') : ''
+    };
+  }));
+  return rows.sort((a, b) => Date.parse(b.participatedAt) - Date.parse(a.participatedAt));
 }
 
-app.post('/api/dealers', (req, res) => {
+app.post('/api/dealers', async (req, res) => {
   if (req.body.passcode !== ADMIN_PASSCODE) return res.status(401).json({ error: 'Invalid admin passcode.' });
-  res.json({ dealers: buildDealerRows() });
+  res.json({ dealers: await buildDealerRows() });
 });
 
-app.get('/api/dealers/export', (req, res) => {
+app.get('/api/dealers/export', async (req, res) => {
   if (req.query.passcode !== ADMIN_PASSCODE) return res.status(401).send('Invalid admin passcode.');
 
-  const rows = buildDealerRows();
+  const rows = await buildDealerRows();
   const headers = ['Shop Name', 'Dealer Name', 'Mobile', 'Participated At', 'Won', 'Reward', 'Coupon Code', 'Coupon Status', 'Expires At', 'Redeemed At'];
   const csvEscape = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const lines = [headers.map(csvEscape).join(',')];
@@ -245,9 +252,15 @@ app.get('/api/dealers/export', (req, res) => {
   res.send(lines.join('\n'));
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Rajnandani Scratch & Win running at http://localhost:${PORT}`);
-  console.log(`Staff redemption page at http://localhost:${PORT}/staff.html (passcode: ${STAFF_PASSCODE})`);
-  console.log(`Dealer data page at http://localhost:${PORT}/dealers.html (passcode: ${ADMIN_PASSCODE})`);
-});
+module.exports = app;
+
+// Only bind a port for local `npm start` / Render — Vercel imports `app` directly.
+if (require.main === module) {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`Rajnandani Scratch & Win running at http://localhost:${PORT}`);
+    console.log(`Staff redemption page at http://localhost:${PORT}/staff.html (passcode: ${STAFF_PASSCODE})`);
+    console.log(`Dealer data page at http://localhost:${PORT}/dealers.html (passcode: ${ADMIN_PASSCODE})`);
+    console.log(`Data backend: ${process.env.KV_REST_API_URL ? 'Vercel KV' : 'local file (data/store.json)'}`);
+  });
+}
