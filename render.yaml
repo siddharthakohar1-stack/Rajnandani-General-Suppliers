@@ -10,9 +10,12 @@ services:
         sync: false
       - key: ADMIN_PASSCODE
         sync: false
-      - key: DATA_DIR
-        value: /var/data
-    disk:
-      name: scratch-win-data
-      mountPath: /var/data
-      sizeGB: 1
+# Free plan has no persistent disk: data/store.json resets on every restart/redeploy.
+# To keep dealer+coupon data permanently, upgrade to the Starter plan and add:
+#     disk:
+#       name: scratch-win-data
+#       mountPath: /var/data
+#       sizeGB: 1
+#   envVars:
+#     - key: DATA_DIR
+#       value: /var/data
