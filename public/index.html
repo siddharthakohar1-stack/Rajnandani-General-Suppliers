@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
+<title>Rajnandani Suppliers — Scratch &amp; Win</title>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700&family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: { extend: {
+    colors: {
+      primary: '#740010', 'primary-container': '#9b111e',
+      secondary: '#7b5900', 'secondary-container': '#febf2e', 'on-secondary-container': '#6e4f00',
+      tertiary: '#003f23', surface: '#fff8f6', 'surface-container': '#f6ecea',
+      'surface-container-low': '#fcf1ef', 'surface-container-lowest': '#ffffff',
+      'on-surface': '#1f1b1a', 'on-surface-variant': '#5a403f'
+    },
+    fontFamily: { display: ['Outfit','sans-serif'], body: ['Plus Jakarta Sans','sans-serif'] }
+  }}
+};
+</script>
+<style>
+  body{overscroll-behavior:none;}
+  .material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 500,'GRAD' 0,'opsz' 24;}
+  ::-webkit-scrollbar{display:none;}
+</style>
+</head>
+<body class="bg-surface font-body text-on-surface antialiased min-h-screen flex flex-col">
+
+<header class="w-full bg-surface/90 backdrop-blur-xl shadow-sm sticky top-0 z-40">
+  <div class="h-16 px-4 flex items-center gap-2 max-w-md mx-auto">
+    <div class="w-9 h-9 rounded-full bg-primary flex items-center justify-center shrink-0">
+      <span class="material-symbols-outlined text-white text-[20px]">storefront</span>
+    </div>
+    <div class="flex flex-col leading-tight">
+      <span class="font-display font-bold text-primary text-sm">Rajnandani Suppliers</span>
+      <span class="text-[11px] text-on-surface-variant">Festival Scratch &amp; Win</span>
+    </div>
+  </div>
+</header>
+
+<main class="flex-1 w-full max-w-md mx-auto px-4 pb-10 flex flex-col gap-5">
+
+  <!-- Hero -->
+  <section class="mt-4 relative overflow-hidden rounded-2xl bg-gradient-to-r from-primary via-primary-container to-secondary p-5 text-white shadow-md">
+    <div class="absolute -right-6 -bottom-6 w-28 h-28 rounded-full bg-secondary-container/20 blur-xl pointer-events-none"></div>
+    <div class="flex items-center gap-1.5">
+      <span class="material-symbols-outlined text-[18px]">celebration</span>
+      <span class="text-[11px] uppercase tracking-wider font-bold text-secondary-container">Dashain · Tihar · Chhath 2026</span>
+    </div>
+    <h1 id="campaignName" class="font-display text-xl font-bold mt-1">Loading campaign…</h1>
+    <p id="campaignMessage" class="text-sm text-white/90 mt-1"></p>
+  </section>
+
+  <!-- Step 1: phone gate -->
+  <section id="phoneGate" class="rounded-2xl bg-surface-container-lowest p-5 shadow-sm flex flex-col gap-3">
+    <h2 class="font-display font-semibold text-lg flex items-center gap-1.5">
+      <span class="material-symbols-outlined text-primary">storefront</span> Dealer Details
+    </h2>
+    <p class="text-sm text-on-surface-variant">One scratch attempt per dealer for this campaign. We use these details to issue your coupon and share future gifts/offers.</p>
+    <input id="shopNameInput" type="text" maxlength="80" placeholder="Shop Name"
+      class="w-full rounded-xl border border-black/10 px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary"/>
+    <input id="dealerNameInput" type="text" maxlength="80" placeholder="Dealer / Owner Name"
+      class="w-full rounded-xl border border-black/10 px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary"/>
+    <input id="mobileInput" type="tel" inputmode="numeric" maxlength="10" placeholder="10-digit Mobile Number"
+      class="w-full rounded-xl border border-black/10 px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary"/>
+    <button id="startBtn" class="w-full py-3 rounded-xl bg-primary text-white font-semibold flex items-center justify-center gap-2 active:scale-[0.98] transition-transform">
+      <span class="material-symbols-outlined text-[20px]">auto_awesome</span> Scratch Now
+    </button>
+    <p id="gateError" class="text-sm text-red-600 hidden"></p>
+  </section>
+
+  <!-- Step 2: scratch card -->
+  <section id="scratchSection" class="hidden flex flex-col items-center">
+    <p class="text-sm text-on-surface-variant text-center mb-2">Drag your finger or mouse across the golden foil to reveal your reward</p>
+    <div class="relative w-full max-w-sm rounded-2xl overflow-hidden shadow-xl bg-surface-container-lowest select-none">
+      <div id="rewardUnderlay" class="w-full p-6 flex flex-col items-center text-center gap-2 min-h-[260px] justify-center">
+        <span class="text-on-surface-variant text-sm">Preparing your reward…</span>
+      </div>
+      <canvas id="scratchCanvas" class="absolute inset-0 w-full h-full cursor-pointer touch-none z-10 transition-opacity duration-500"></canvas>
+      <div id="scratchIndicator" class="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 pointer-events-none px-3 py-1 rounded-full bg-black/70 text-white text-xs flex items-center gap-1">
+        <span id="scratchPercentText">0% scratched</span>
+      </div>
+    </div>
+    <button id="revealAllBtn" class="mt-3 text-sm text-primary underline">Can't scratch? Tap to reveal instead</button>
+  </section>
+
+  <!-- How to redeem -->
+  <section class="rounded-2xl bg-surface-container-lowest p-5 shadow-sm">
+    <h2 class="font-display font-semibold text-lg text-primary mb-2">How to Redeem</h2>
+    <div class="flex flex-col gap-2 text-sm">
+      <div class="flex gap-2"><span class="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold shrink-0">1</span><span>Scratch the card above to reveal your reward instantly.</span></div>
+      <div class="flex gap-2"><span class="w-6 h-6 rounded-full bg-secondary text-white flex items-center justify-center text-xs font-bold shrink-0">2</span><span>Show the coupon code at the billing counter before it expires.</span></div>
+      <div class="flex gap-2"><span class="w-6 h-6 rounded-full bg-tertiary text-white flex items-center justify-center text-xs font-bold shrink-0">3</span><span>Staff verifies and redeems it once — enjoy your savings!</span></div>
+    </div>
+  </section>
+
+  <!-- Terms -->
+  <section class="rounded-2xl bg-surface-container-lowest p-5 shadow-sm">
+    <h2 class="font-display font-semibold text-base text-primary mb-2 flex items-center gap-1.5">
+      <span class="material-symbols-outlined text-[18px]">receipt_long</span> Terms &amp; Conditions
+    </h2>
+    <ul id="termsList" class="text-xs text-on-surface-variant list-disc list-inside space-y-1"></ul>
+  </section>
+
+</main>
+
+<script>
+(function () {
+  const shopNameInput = document.getElementById('shopNameInput');
+  const dealerNameInput = document.getElementById('dealerNameInput');
+  const mobileInput = document.getElementById('mobileInput');
+  const startBtn = document.getElementById('startBtn');
+  const gateError = document.getElementById('gateError');
+  const phoneGate = document.getElementById('phoneGate');
+  const scratchSection = document.getElementById('scratchSection');
+  const rewardUnderlay = document.getElementById('rewardUnderlay');
+  const canvas = document.getElementById('scratchCanvas');
+  const indicator = document.getElementById('scratchIndicator');
+  const percentText = document.getElementById('scratchPercentText');
+  const revealAllBtn = document.getElementById('revealAllBtn');
+  const ctx = canvas.getContext('2d');
+
+  let isDrawing = false, isRevealed = false, lastX = 0, lastY = 0;
+
+  fetch('/api/campaign').then(r => r.json()).then(c => {
+    document.getElementById('campaignName').textContent = c.name;
+    document.getElementById('campaignMessage').textContent = c.message;
+    document.getElementById('termsList').innerHTML = c.terms.map(t => `<li>${t}</li>`).join('');
+    if (!c.active) {
+      startBtn.disabled = true;
+      startBtn.classList.add('opacity-50');
+      gateError.textContent = 'This campaign is not currently active. Please check back during the festival dates.';
+      gateError.classList.remove('hidden');
+    }
+  });
+
+  function setupCanvas() {
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * window.devicePixelRatio;
+    canvas.height = rect.height * window.devicePixelRatio;
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    drawFoil(rect.width, rect.height);
+  }
+
+  function drawFoil(width, height) {
+    const grad = ctx.createLinearGradient(0, 0, width, height);
+    grad.addColorStop(0, '#f59e0b');
+    grad.addColorStop(0.2, '#fef3c7');
+    grad.addColorStop(0.4, '#d97706');
+    grad.addColorStop(0.7, '#fef08a');
+    grad.addColorStop(1, '#b45309');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.fillStyle = '#78350f';
+    ctx.textAlign = 'center';
+    ctx.font = '32px sans-serif';
+    ctx.fillText('🪙', width / 2, height / 2 - 24);
+    ctx.font = 'bold 15px "Outfit", sans-serif';
+    ctx.fillText('SCRATCH & WIN', width / 2, height / 2 + 14);
+    ctx.font = '500 12px "Plus Jakarta Sans", sans-serif';
+    ctx.fillStyle = '#92400e';
+    ctx.fillText('Rub with your finger to reveal reward', width / 2, height / 2 + 34);
+  }
+
+  function getCoords(e) {
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    return { x: clientX - rect.left, y: clientY - rect.top };
+  }
+
+  function scratch(x, y) {
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.beginPath(); ctx.arc(x, y, 26, 0, Math.PI * 2); ctx.fill();
+    ctx.lineWidth = 52; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(x, y); ctx.stroke();
+    lastX = x; lastY = y;
+  }
+
+  function checkScratchPercent() {
+    if (isRevealed) return;
+    const w = canvas.width, h = canvas.height, step = 20;
+    const imgData = ctx.getImageData(0, 0, w, h).data;
+    let emptyCount = 0, totalSampled = 0;
+    for (let i = 3; i < imgData.length; i += 4 * step) {
+      totalSampled++;
+      if (imgData[i] === 0) emptyCount++;
+    }
+    const percent = Math.min(100, Math.round((emptyCount / totalSampled) * 100));
+    percentText.textContent = percent + '% scratched';
+    if (percent >= 45) unlockReward();
+  }
+
+  function unlockReward() {
+    if (isRevealed) return;
+    isRevealed = true;
+    canvas.style.opacity = '0';
+    indicator.style.display = 'none';
+    setTimeout(() => { canvas.style.display = 'none'; }, 500);
+  }
+
+  function onPointerDown(e) {
+    if (isRevealed) return;
+    isDrawing = true;
+    const { x, y } = getCoords(e);
+    lastX = x; lastY = y;
+    scratch(x, y);
+  }
+  function onPointerMove(e) {
+    if (!isDrawing || isRevealed) return;
+    const { x, y } = getCoords(e);
+    scratch(x, y);
+  }
+  function onPointerUp() {
+    if (!isDrawing) return;
+    isDrawing = false;
+    checkScratchPercent();
+  }
+
+  canvas.addEventListener('mousedown', onPointerDown);
+  canvas.addEventListener('mousemove', onPointerMove);
+  window.addEventListener('mouseup', onPointerUp);
+  canvas.addEventListener('touchstart', onPointerDown, { passive: false });
+  canvas.addEventListener('touchmove', (e) => { e.preventDefault(); onPointerMove(e); }, { passive: false });
+  window.addEventListener('touchend', onPointerUp);
+
+  revealAllBtn.addEventListener('click', unlockReward);
+
+  function renderResult(data) {
+    if (data.won && data.coupon) {
+      rewardUnderlay.innerHTML = `
+        <div class="flex items-center gap-1 text-secondary mb-1">
+          <span class="material-symbols-outlined text-[18px]">auto_awesome</span>
+          <span class="text-xs tracking-wider uppercase font-bold">You Won!</span>
+          <span class="material-symbols-outlined text-[18px]">auto_awesome</span>
+        </div>
+        <p class="font-display text-2xl font-bold text-primary">${data.rewardLabel}</p>
+        <div class="mt-3 w-full bg-surface-container rounded-xl p-3 flex items-center justify-between gap-2">
+          <div class="flex flex-col text-left">
+            <span class="text-[10px] uppercase text-on-surface-variant">Coupon Code</span>
+            <span class="font-mono font-bold text-lg text-primary tracking-widest" id="promoCodeText">${data.coupon.code}</span>
+          </div>
+          <button id="copyCodeBtn" class="flex items-center gap-1 bg-primary text-white px-3 py-2 rounded-lg text-sm active:scale-95 transition-transform">
+            <span class="material-symbols-outlined text-[18px]">content_copy</span> Copy
+          </button>
+        </div>
+        <p class="text-xs text-on-surface-variant mt-2">Valid until ${new Date(data.coupon.expiresAt).toLocaleDateString()}. Show this code at the counter.</p>
+      `;
+      document.getElementById('copyCodeBtn').addEventListener('click', () => {
+        navigator.clipboard.writeText(data.coupon.code).then(() => {
+          const btn = document.getElementById('copyCodeBtn');
+          btn.innerHTML = '<span class="material-symbols-outlined text-[18px]">done</span> Copied!';
+          setTimeout(() => { btn.innerHTML = '<span class="material-symbols-outlined text-[18px]">content_copy</span> Copy'; }, 2000);
+        });
+      });
+    } else {
+      rewardUnderlay.innerHTML = `
+        <span class="material-symbols-outlined text-[40px] text-on-surface-variant">sentiment_dissatisfied</span>
+        <p class="font-display text-lg font-semibold text-on-surface mt-1">${data.rewardLabel || 'Better Luck Next Time'}</p>
+        <p class="text-sm text-on-surface-variant">Thank you for participating. Watch out for more festival offers!</p>
+      `;
+    }
+  }
+
+  startBtn.addEventListener('click', async () => {
+    const shopName = shopNameInput.value.trim();
+    const dealerName = dealerNameInput.value.trim();
+    const mobile = mobileInput.value.trim();
+    gateError.classList.add('hidden');
+
+    if (shopName.length < 2) {
+      gateError.textContent = 'Please enter your shop name.';
+      gateError.classList.remove('hidden');
+      return;
+    }
+    if (dealerName.length < 2) {
+      gateError.textContent = 'Please enter the dealer/owner name.';
+      gateError.classList.remove('hidden');
+      return;
+    }
+    if (!/^\d{10}$/.test(mobile)) {
+      gateError.textContent = 'Please enter a valid 10-digit mobile number.';
+      gateError.classList.remove('hidden');
+      return;
+    }
+
+    startBtn.disabled = true;
+    startBtn.textContent = 'Checking…';
+
+    try {
+      const res = await fetch('/api/scratch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shopName, dealerName, mobile })
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        gateError.textContent = data.error || 'Something went wrong.';
+        gateError.classList.remove('hidden');
+        startBtn.disabled = false;
+        startBtn.innerHTML = '<span class="material-symbols-outlined text-[20px]">auto_awesome</span> Scratch Now';
+        return;
+      }
+
+      phoneGate.classList.add('hidden');
+      scratchSection.classList.remove('hidden');
+      renderResult(data);
+      setupCanvas();
+    } catch (err) {
+      gateError.textContent = 'Could not reach the server. Please try again.';
+      gateError.classList.remove('hidden');
+      startBtn.disabled = false;
+      startBtn.innerHTML = '<span class="material-symbols-outlined text-[20px]">auto_awesome</span> Scratch Now';
+    }
+  });
+})();
+</script>
+</body>
+</html>

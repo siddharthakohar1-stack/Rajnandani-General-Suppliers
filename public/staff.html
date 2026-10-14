@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Rajnandani Suppliers — Staff Coupon Redemption</title>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700&family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = { theme: { extend: {
+  colors: { primary: '#740010', 'primary-container': '#9b111e', secondary: '#7b5900' },
+  fontFamily: { display: ['Outfit','sans-serif'], body: ['Plus Jakarta Sans','sans-serif'] }
+}}};
+</script>
+<style>.material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 500,'GRAD' 0,'opsz' 24;}</style>
+</head>
+<body class="bg-[#fff8f6] font-body text-[#1f1b1a] min-h-screen flex flex-col items-center px-4 py-6">
+
+<div class="w-full max-w-sm flex items-center gap-2 mb-6">
+  <div class="w-9 h-9 rounded-full bg-primary flex items-center justify-center">
+    <span class="material-symbols-outlined text-white text-[20px]">point_of_sale</span>
+  </div>
+  <div class="flex flex-col leading-tight">
+    <span class="font-display font-bold text-primary text-sm">Rajnandani Suppliers</span>
+    <span class="text-[11px] text-[#5a403f]">Staff Coupon Redemption</span>
+  </div>
+</div>
+
+<div class="w-full max-w-sm bg-white rounded-2xl shadow-sm p-5 flex flex-col gap-3">
+  <label class="text-sm font-semibold">Staff Passcode</label>
+  <input id="passcode" type="password" placeholder="Staff passcode"
+    class="w-full rounded-xl border border-black/10 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary"/>
+
+  <label class="text-sm font-semibold mt-2">Coupon Code</label>
+  <input id="code" type="text" placeholder="e.g. RAJ-AB12CD3456" autocapitalize="characters"
+    class="w-full rounded-xl border border-black/10 px-4 py-3 font-mono uppercase focus:outline-none focus:ring-2 focus:ring-primary"/>
+
+  <div class="flex gap-2 mt-1">
+    <button id="verifyBtn" class="flex-1 py-3 rounded-xl bg-[#f6ecea] text-primary font-semibold flex items-center justify-center gap-1.5 active:scale-95 transition-transform">
+      <span class="material-symbols-outlined text-[18px]">search</span> Verify
+    </button>
+    <button id="redeemBtn" class="flex-1 py-3 rounded-xl bg-primary text-white font-semibold flex items-center justify-center gap-1.5 active:scale-95 transition-transform">
+      <span class="material-symbols-outlined text-[18px]">check_circle</span> Redeem
+    </button>
+  </div>
+
+  <div id="result" class="mt-2 hidden rounded-xl p-4 text-sm"></div>
+</div>
+
+<script>
+(function () {
+  const passcode = document.getElementById('passcode');
+  const codeInput = document.getElementById('code');
+  const resultBox = document.getElementById('result');
+
+  function showResult(ok, title, lines) {
+    resultBox.classList.remove('hidden');
+    resultBox.className = 'mt-2 rounded-xl p-4 text-sm ' + (ok ? 'bg-green-50 text-green-900 border border-green-200' : 'bg-red-50 text-red-900 border border-red-200');
+    resultBox.innerHTML = `<p class="font-bold mb-1">${title}</p>` + lines.map(l => `<p>${l}</p>`).join('');
+  }
+
+  async function call(path) {
+    const res = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: codeInput.value.trim().toUpperCase(), passcode: passcode.value })
+    });
+    const data = await res.json();
+    return { ok: res.ok, data };
+  }
+
+  document.getElementById('verifyBtn').addEventListener('click', async () => {
+    const { ok, data } = await call('/api/verify');
+    if (!ok) return showResult(false, 'Error', [data.error]);
+    const c = data.coupon;
+    showResult(!data.expired && c.status === 'issued', `Status: ${c.status.toUpperCase()}${data.expired ? ' (EXPIRED)' : ''}`,
+      [`Shop: ${c.shopName}`, `Dealer: ${c.dealerName} (${c.mobile})`, `Reward: ${c.rewardLabel}`, `Issued: ${new Date(c.issuedAt).toLocaleString()}`, `Expires: ${new Date(c.expiresAt).toLocaleString()}`]);
+  });
+
+  document.getElementById('redeemBtn').addEventListener('click', async () => {
+    const { ok, data } = await call('/api/redeem');
+    if (!ok) return showResult(false, 'Cannot redeem', [data.error]);
+    showResult(true, 'Redeemed successfully', [`Shop: ${data.coupon.shopName}`, `Dealer: ${data.coupon.dealerName} (${data.coupon.mobile})`, `Reward: ${data.coupon.rewardLabel}`, `Redeemed at: ${new Date(data.coupon.redeemedAt).toLocaleString()}`]);
+  });
+})();
+</script>
+</body>
+</html>

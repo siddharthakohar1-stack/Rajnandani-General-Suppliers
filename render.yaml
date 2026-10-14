@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: rajnandani-scratch-win
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: STAFF_PASSCODE
+        sync: false
+      - key: ADMIN_PASSCODE
+        sync: false
+      - key: DATA_DIR
+        value: /var/data
+    disk:
+      name: scratch-win-data
+      mountPath: /var/data
+      sizeGB: 1
