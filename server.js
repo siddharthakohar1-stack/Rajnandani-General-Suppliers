@@ -3,7 +3,7 @@
 // duplicate-participation blocking, and redemption. The browser only animates
 // the scratch reveal of a result the server already decided.
 //
-// Storage: Vercel KV (Redis) when KV_REST_API_URL is set — required on Vercel,
+// Storage: Neon Postgres when DATABASE_URL is set — required on Vercel,
 // since serverless functions have no persistent disk or long-lived memory.
 // Falls back to a local JSON file for `npm start` on your own machine.
 
@@ -47,8 +47,8 @@ const ADMIN_PASSCODE = process.env.ADMIN_PASSCODE || 'owner2026';
 // ---------------------------------------------------------------------------
 // Data layer — two interchangeable backends behind the same small interface.
 // ---------------------------------------------------------------------------
-const db = process.env.KV_REST_API_URL
-  ? require('./lib/kv-store')
+const db = process.env.DATABASE_URL
+  ? require('./lib/pg-store')
   : require('./lib/file-store');
 
 function normalizeMobile(mobile) {
@@ -261,6 +261,6 @@ if (require.main === module) {
     console.log(`Rajnandani Scratch & Win running at http://localhost:${PORT}`);
     console.log(`Staff redemption page at http://localhost:${PORT}/staff.html (passcode: ${STAFF_PASSCODE})`);
     console.log(`Dealer data page at http://localhost:${PORT}/dealers.html (passcode: ${ADMIN_PASSCODE})`);
-    console.log(`Data backend: ${process.env.KV_REST_API_URL ? 'Vercel KV' : 'local file (data/store.json)'}`);
+    console.log(`Data backend: ${process.env.DATABASE_URL ? 'Neon Postgres' : 'local file (data/store.json)'}`);
   });
 }

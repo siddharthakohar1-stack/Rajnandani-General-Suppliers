@@ -33,16 +33,15 @@ Edit the `CAMPAIGN` and `REWARDS` objects at the top of `server.js`:
 Two interchangeable storage backends live in `lib/`:
 
 - `lib/file-store.js` — a local JSON file (`data/store.json`). Used automatically when no
-  `KV_REST_API_URL` env var is set, i.e. for `npm start` on your own machine.
-- `lib/kv-store.js` — Vercel KV (Redis). Used automatically when `KV_REST_API_URL` is present, i.e.
+  `DATABASE_URL` env var is set, i.e. for `npm start` on your own machine.
+- `lib/pg-store.js` — Neon Postgres. Used automatically when `DATABASE_URL` is present, i.e.
   when deployed on Vercel, since serverless functions have no persistent disk or memory between requests.
 
 ## Deploying on Vercel
 
 1. Push this repo to GitHub, import it into a Vercel project.
-2. In the project's **Storage** tab, create/connect a **KV** database — this injects
-   `KV_REST_API_URL`/`KV_REST_API_TOKEN` automatically, which is what switches the app onto the KV
-   backend above. Without this step, every request fails because nothing initialized `@vercel/kv`.
+2. Create a Neon Postgres DB (neon.tech, or Vercel Storage → Neon) and set `DATABASE_URL` to its
+   connection string. Tables are created automatically on first request.
 3. In **Settings → Environment Variables**, set `STAFF_PASSCODE` and `ADMIN_PASSCODE` to your own
    values — don't leave the defaults (`2026` / `owner2026`) live in production.
 4. Redeploy. Customer page at your Vercel URL, staff page at `/staff.html`, dealer data at

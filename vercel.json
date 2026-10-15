@@ -1,8 +1,5 @@
 {
   "rewrites": [
-    { "source": "/", "destination": "/public/index.html" },
-    { "source": "/staff.html", "destination": "/public/staff.html" },
-    { "source": "/dealers.html", "destination": "/public/dealers.html" },
     { "source": "/api/:path*", "destination": "/api/index" }
   ]
 }
